@@ -1,13 +1,13 @@
 import mc from "minecraft-protocol";
 import { Enums } from "../../proxy/Enums.js";
 
-interface TheAlteningResponse {
+interface AlteningAuthResponse {
   error?: string;
   selectedProfile?: {
-    name?: string;
-    id?: string;
+    name: string;
+    id: string;
   };
-  [key: string]: any; // for other fields
+  // You can expand this interface if there are more fields you need
 }
 
 export async function getTokenProfileTheAltening(token: string): Promise<object> {
@@ -20,26 +20,24 @@ export async function getTokenProfileTheAltening(token: string): Promise<object>
     }),
   };
 
-  let resJson: TheAlteningResponse;
+  const res = await fetch("http://authserver.thealtening.com/authenticate", fetchOptions);
+  const resJson = (await res.json()) as AlteningAuthResponse;
 
-  try {
-    const res = await fetch("http://authserver.thealtening.com/authenticate", fetchOptions);
-    resJson = (await res.json()) as TheAlteningResponse; // <-- cast here
-  } catch (err: unknown) {
-    // Cast err to Error to safely access .message
-    const e = err as Error;
-    throw new Error(`Failed to fetch from TheAltening: ${e.message}`);
+  // Properly check for error
+  if (resJson.error) {
+    throw new Error(Enums.ChatColor.RED + resJson.error);
   }
 
-  if (resJson.error) throw new Error(Enums.ChatColor.RED + resJson.error);
-  if (!resJson.selectedProfile?.name || resJson.selectedProfile.name.length < 3) {
+  // Validate selectedProfile exists
+  const profile = resJson.selectedProfile;
+  if (!profile || !profile.name || profile.name.length < 3) {
     throw new Error(Enums.ChatColor.RED + "Invalid response from TheAltening received!");
   }
 
   return {
     auth: "mojang",
     sessionServer: "http://sessionserver.thealtening.com",
-    username: resJson.selectedProfile.name,
+    username: profile.name,
     haveCredentials: true,
     session: resJson,
   };
