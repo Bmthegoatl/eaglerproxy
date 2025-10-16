@@ -1,10 +1,12 @@
 import { Config } from "./launcher_types.js";
 
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 26178; // default fallback if not set
+
 export const config: Config = {
   adapter: {
     name: "EaglerProxy",
     bindHost: "0.0.0.0",
-    bindPort: process.env.PORT ? parseInt(process.env.PORT) : 26178, // <-- fixed
+    bindPort: PORT, // dynamic port from environment
     maxConcurrentClients: 20,
     useNatives: true,
     skinServer: {
