@@ -7,7 +7,7 @@ export const config: Config = {
   adapter: {
     name: "EaglerProxy",
     bindHost: "0.0.0.0",
-    bindPort: 8080,
+    bindPort: port,           // dynamic port
     maxConcurrentClients: 20,
     // set this to false if you are unable to install sharp due to either the use of a platform that does not support native modules
     // or if you are unable to install the required dependencies. this will cause the proxy to use jimp instead of sharp, which may
@@ -46,8 +46,8 @@ export const config: Config = {
       originBlacklist: null,
     },
     server: {
-      host: "127.0.0.1",
-      port: 1111,
+      host: "la2.freeminecrafthost.com",
+      port: 26178,
     },
     tls: undefined,
   },
