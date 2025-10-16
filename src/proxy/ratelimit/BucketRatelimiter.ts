@@ -5,7 +5,7 @@ export default class BucketRateLimiter {
   public refillsPerMin: number;
   public keyMap: Map<string, KeyData>;
   public static readonly GC_TOLERANCE: number = 50;
-  private sweeper: NodeJS.Timer;
+  private sweeper: NodeJS.Timeout; // <-- change from Timer to Timeout
 
   constructor(capacity: number, refillsPerMin: number) {
     this.capacity = capacity;
@@ -21,15 +21,18 @@ export default class BucketRateLimiter {
   }
 
   public consume(key: string, consumeTokens: number = 1): RateLimitData {
-    if (this.keyMap.has(key)) {
-      const bucket = this.keyMap.get(key);
+    const bucket = this.keyMap.get(key);
 
+    if (bucket) {
       const now = Date.now();
+
       if (now - bucket.lastRefillTime > 60000 && bucket.tokens < this.capacity) {
         const refillTimes = Math.floor((now - bucket.lastRefillTime) / 60000);
         bucket.tokens = Math.min(this.capacity, bucket.tokens + refillTimes * this.refillsPerMin);
-        bucket.lastRefillTime = now - (refillTimes % 60000);
-      } else if (now - bucket.lastRefillTime > 60000 && bucket.tokens >= this.capacity) bucket.lastRefillTime = now;
+        bucket.lastRefillTime = now - ((now - bucket.lastRefillTime) % 60000);
+      } else if (now - bucket.lastRefillTime > 60000 && bucket.tokens >= this.capacity) {
+        bucket.lastRefillTime = now;
+      }
 
       if (bucket.tokens >= consumeTokens) {
         bucket.tokens -= consumeTokens;
@@ -44,75 +47,52 @@ export default class BucketRateLimiter {
         };
       }
     } else {
-      const bucket: KeyData = {
-        tokens: this.capacity,
-        lastRefillTime: Date.now(),
-      };
-      if (bucket.tokens >= consumeTokens) {
-        bucket.tokens -= consumeTokens;
-        this.keyMap.set(key, bucket);
-        return { success: true };
-      } else {
-        const difference = consumeTokens - bucket.tokens;
-        const now = Date.now();
-        return {
-          success: false,
-          missingTokens: difference,
-          retryIn: Math.ceil(difference / this.refillsPerMin) * 60000 - ((now - bucket.lastRefillTime) % 60000),
-          retryAt: Date.now() + Math.ceil(difference / this.refillsPerMin) * 60000 - ((now - bucket.lastRefillTime) % 60000),
-        };
-      }
+      const newBucket: KeyData = { tokens: this.capacity - consumeTokens, lastRefillTime: Date.now() };
+      this.keyMap.set(key, newBucket);
+      return { success: consumeTokens <= this.capacity };
     }
   }
 
   public addToBucket(key: string, amount: number) {
-    if (this.keyMap.has(key)) {
-      this.keyMap.get(key).tokens += amount;
+    const bucket = this.keyMap.get(key);
+    if (bucket) {
+      bucket.tokens += amount;
     } else {
-      this.keyMap.set(key, {
-        tokens: this.capacity + amount,
-        lastRefillTime: Date.now(),
-      });
+      this.keyMap.set(key, { tokens: this.capacity + amount, lastRefillTime: Date.now() });
     }
   }
 
   public setBucketSize(key: string, amount: number) {
-    if (this.keyMap.has(key)) {
-      this.keyMap.get(key).tokens = amount;
+    const bucket = this.keyMap.get(key);
+    if (bucket) {
+      bucket.tokens = amount;
     } else {
-      this.keyMap.set(key, {
-        tokens: amount,
-        lastRefillTime: Date.now(),
-      });
+      this.keyMap.set(key, { tokens: amount, lastRefillTime: Date.now() });
     }
   }
 
   public subtractFromBucket(key: string, amount: number) {
-    if (this.keyMap.has(key)) {
-      const bucket = this.keyMap.get(key);
+    const bucket = this.keyMap.get(key);
+    if (bucket) {
       bucket.tokens -= amount;
     } else {
-      this.keyMap.set(key, {
-        tokens: this.capacity - amount,
-        lastRefillTime: Date.now(),
-      });
+      this.keyMap.set(key, { tokens: this.capacity - amount, lastRefillTime: Date.now() });
     }
   }
 
   public removeFull() {
-    let remove: string[] = [];
     const now = Date.now();
     this.keyMap.forEach((v, k) => {
       if (now - v.lastRefillTime > 60000 && v.tokens < this.capacity) {
         const refillTimes = Math.floor((now - v.lastRefillTime) / 60000);
         v.tokens = Math.min(this.capacity, v.tokens + refillTimes * this.refillsPerMin);
-        v.lastRefillTime = now - (refillTimes % 60000);
-      } else if (now - v.lastRefillTime > 60000 && v.tokens >= this.capacity) v.lastRefillTime = now;
-      if (v.tokens == this.capacity) {
-        remove.push(k);
+        v.lastRefillTime = now - ((now - v.lastRefillTime) % 60000);
+      } else if (now - v.lastRefillTime > 60000 && v.tokens >= this.capacity) {
+        v.lastRefillTime = now;
       }
+
+      if (v.tokens >= this.capacity) this.keyMap.delete(k);
     });
-    remove.forEach((v) => this.keyMap.delete(v));
   }
 }
 
