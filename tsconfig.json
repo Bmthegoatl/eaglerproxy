@@ -9,7 +9,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
-    "types": ["node"]   // <-- this line tells TS about Node globals like Buffer, process, fs
+    "types": ["node"]
   },
   "include": ["src/**/*"]
 }
